@@ -1,21 +1,21 @@
 #!/bin/zsh
 
-typeset -gr PCTL_CMDNAME=$0:t
-typeset -gr PCTL_VERSION='v0.1.0'
+(( ${+PCTL_CMDNAME} )) || typeset -gr PCTL_CMDNAME=$0:t
+(( ${+PCTL_VERSION} )) || typeset -gr PCTL_VERSION='v0.1.0'
 
-typeset -grA PCTL_COLOR=(
+(( ${+PCTL_COLOR} )) || typeset -grA PCTL_COLOR=(
   success '32'
   error   '129'
 )
 
-typeset -gra PCTL_PROXY_VARS=(
+(( ${+PCTL_PROXY_VARS} )) || typeset -gra PCTL_PROXY_VARS=(
   http_proxy
   HTTP_PROXY
   https_proxy
   HTTPS_PROXY
 )
 
-typeset -gra PCTL_ALL_VARS=(
+(( ${+PCTL_ALL_VARS} )) || typeset -gra PCTL_ALL_VARS=(
   http_proxy
   HTTP_PROXY
   https_proxy

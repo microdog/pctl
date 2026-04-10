@@ -48,6 +48,11 @@ test_no_argument_shows_help() {
   assert_contains "$TEST_OUTPUT" 'Usage: pctl [OPTIONS]'
 }
 
+test_help_can_run_twice_in_same_shell() {
+  run_shell 0 'source '"${(q)TEST_INIT_PATH}"'; pctl --help >/dev/null; pctl --help'
+  assert_contains "$TEST_OUTPUT" 'Usage: pctl [OPTIONS]'
+}
+
 test_set_writes_lowercase_uppercase_and_no_proxy() {
   run_with_plugin 0 'PCTL_PROXY_ADDRESS=proxy.example.com PCTL_PROXY_PORT=8080 PCTL_NO_PROXY=localhost,127.0.0.1 pctl --set; print -r -- "http_proxy=$http_proxy"; print -r -- "HTTP_PROXY=$HTTP_PROXY"; print -r -- "https_proxy=$https_proxy"; print -r -- "HTTPS_PROXY=$HTTPS_PROXY"; print -r -- "no_proxy=$no_proxy"; print -r -- "NO_PROXY=$NO_PROXY"'
   assert_contains "$TEST_OUTPUT" 'http_proxy=http://proxy.example.com:8080'
@@ -98,6 +103,7 @@ test_illegal_option_message_strips_leading_dashes() {
 }
 
 test_no_argument_shows_help
+test_help_can_run_twice_in_same_shell
 test_set_writes_lowercase_uppercase_and_no_proxy
 test_set_refuses_existing_uppercase_proxy_state
 test_set_clears_stale_no_proxy_when_not_configured
