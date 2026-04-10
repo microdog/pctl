@@ -28,7 +28,9 @@ zplug 'ytet5uy4/pctl'
 Add the following to your `.zshenv`:
 
 ```zsh
-export PCTL_PROXY_ADDRESS=proxy.example.com PCTL_PROXY_PORT=8080
+export PCTL_PROXY_ADDRESS=proxy.example.com
+export PCTL_PROXY_PORT=8080
+export PCTL_NO_PROXY=localhost,127.0.0.1,.internal.example.com
 ```
 
 or
@@ -36,16 +38,22 @@ or
 If you have [envchain][envchain-link] installed, run following command:
 
 ```zsh
-$ envchain --set proxy PCTL_PROXY_ADDRESS PCTL_PROXY_PORT
+$ envchain --set proxy PCTL_PROXY_ADDRESS PCTL_PROXY_PORT PCTL_NO_PROXY
 proxy.PCTL_PROXY_ADDRESS: proxy.example.com
 proxy.PCTL_PROXY_PORT: 8080
+proxy.PCTL_NO_PROXY: localhost,127.0.0.1,.internal.example.com
 ```
+
+Running `pctl --set` manages both lowercase and uppercase proxy variables:
+`http_proxy`, `HTTP_PROXY`, `https_proxy`, `HTTPS_PROXY`, `no_proxy`, and `NO_PROXY`.
+
+Use `pctl --status` to inspect the current values of all managed variables.
 
 To keep the environment variables of proxy when using `sudo`,
 append the following to `/etc/sudoers` via `sudo visudo`:
 
 ```zsh
-Defaults env_keep += "http_proxy https_proxy"
+Defaults env_keep += "http_proxy HTTP_PROXY https_proxy HTTPS_PROXY no_proxy NO_PROXY"
 ```
 
 ## License

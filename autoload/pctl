@@ -1,85 +1,172 @@
 #!/bin/zsh
 
-typeset -g CMDNAME=$0:t
-typeset -g VERSION='v0.1.0'
+typeset -gr PCTL_CMDNAME=$0:t
+typeset -gr PCTL_VERSION='v0.1.0'
 
-typeset -gA color=(
+typeset -grA PCTL_COLOR=(
   success '32'
   error   '129'
 )
 
+typeset -gra PCTL_PROXY_VARS=(
+  http_proxy
+  HTTP_PROXY
+  https_proxy
+  HTTPS_PROXY
+)
+
+typeset -gra PCTL_ALL_VARS=(
+  http_proxy
+  HTTP_PROXY
+  https_proxy
+  HTTPS_PROXY
+  no_proxy
+  NO_PROXY
+)
+
+pctl_any_set() {
+  local var_name value
+
+  for var_name in "$@"; do
+    if (( ${+parameters[$var_name]} )); then
+      value=${(P)var_name}
+      [[ -n $value ]] && return 0
+    fi
+  done
+
+  return 1
+}
+
+pctl_get_envchain_value() {
+  local key=$1
+
+  (( $+commands[envchain] )) || return 1
+  envchain proxy printenv "$key" 2>/dev/null
+}
+
+pctl_read_proxy_config() {
+  local envchain_value
+
+  PCTL_RESOLVED_ADDRESS=${PCTL_PROXY_ADDRESS-}
+  PCTL_RESOLVED_PORT=${PCTL_PROXY_PORT-}
+  PCTL_RESOLVED_NO_PROXY=${PCTL_NO_PROXY-}
+
+  envchain_value=$(pctl_get_envchain_value PCTL_PROXY_ADDRESS) && [[ -n $envchain_value ]] && PCTL_RESOLVED_ADDRESS=$envchain_value
+  envchain_value=$(pctl_get_envchain_value PCTL_PROXY_PORT) && [[ -n $envchain_value ]] && PCTL_RESOLVED_PORT=$envchain_value
+  envchain_value=$(pctl_get_envchain_value PCTL_NO_PROXY) && [[ -n $envchain_value ]] && PCTL_RESOLVED_NO_PROXY=$envchain_value
+}
+
+pctl_export_var() {
+  local var_name=$1
+  local value=$2
+
+  typeset -gx "${var_name}=${value}"
+}
+
+pctl_set_proxy_state() {
+  local proxy_url=$1
+  local no_proxy_value=${2-}
+
+  pctl_export_var http_proxy "$proxy_url"
+  pctl_export_var HTTP_PROXY "$proxy_url"
+  pctl_export_var https_proxy "$proxy_url"
+  pctl_export_var HTTPS_PROXY "$proxy_url"
+
+  if [[ -n $no_proxy_value ]]; then
+    pctl_export_var no_proxy "$no_proxy_value"
+    pctl_export_var NO_PROXY "$no_proxy_value"
+  else
+    unset no_proxy NO_PROXY
+  fi
+}
+
+pctl_unset_proxy_state() {
+  unset http_proxy HTTP_PROXY https_proxy HTTPS_PROXY no_proxy NO_PROXY
+}
+
+pctl_print_status_var() {
+  local var_name=$1
+  local value=''
+
+  (( ${+parameters[$var_name]} )) && value=${(P)var_name}
+  printf '    %s: %s\n' "$var_name" "$value"
+}
+
+pctl_show_help() {
+  echo "Usage: $PCTL_CMDNAME [OPTIONS]                   "
+  echo "Options:                                         "
+  echo "    -s, --set     Setting environment variable of proxy  "
+  echo "    -u, --unset   Unsetting environment variable of proxy"
+  echo "    -S, --status  Check environment variable of proxy    "
+  echo "    -h, --help    Display help                           "
+  echo "    -v, --version Display version information            "
+  echo
+}
+
+pctl_strip_leading_dashes() {
+  local option_name=$1
+
+  while [[ $option_name == -* ]]; do
+    option_name=${option_name#-}
+  done
+
+  printf '%s' "$option_name"
+}
+
 main() {
-  [[ -n $2 ]] && error_message 'too many arguments' && return 1
+  (( $# == 0 )) && pctl_show_help && return 0
+  (( $# > 1 )) && error_message 'too many arguments' && return 1
+
   case "$1" in
     -s | --set )
       printf 'Setting proxy...'
-      if [[ -n $http_proxy ]] && [[ -n $https_proxy ]]; then
-        cprintf 'error\n' $color[error]
+      if pctl_any_set "${PCTL_PROXY_VARS[@]}"; then
+        cprintf 'error\n' "$PCTL_COLOR[error]"
         printf '  Environment variable has already set.\n\n'
         return 1
       fi
 
-      local address=$PCTL_PROXY_ADDRESS
-      local port=$PCTL_PROXY_PORT
+      pctl_read_proxy_config
 
-      if type envchain > /dev/null; then
-        () {
-          local envchain_address=`envchain proxy printenv PCTL_PROXY_ADDRESS 2>/dev/null`
-          local envchain_port=`envchain proxy printenv PCTL_PROXY_PORT 2>/dev/null`
-
-          if [[ -n $envchain_address ]]; then
-            address=$envchain_address
-          fi
-
-          if [[ -n $envchain_port ]]; then
-            port=$envchain_port
-          fi
-        }
+      if [[ -z $PCTL_RESOLVED_ADDRESS ]] || [[ -z $PCTL_RESOLVED_PORT ]]; then
+        cprintf 'error\n' "$PCTL_COLOR[error]"
+        printf '  Not set `$PCTL_PROXY_ADDRESS` or `$PCTL_PROXY_PORT`.\n'
+        printf '  $ export PCTL_PROXY_ADDRESS=proxy.example.com PCTL_PROXY_PORT=8080\n\n'
+        return 1
       fi
 
-      if [[ -z $address ]] || [[ -z $port ]]; then
-          cprintf 'error\n' $color[error]
-          printf '  Not set `$PCTL_PROXY_ADDRESS` or `$PCTL_PROXY_PORT`.\n'
-          printf '  $ export PCTL_PROXY_ADDRESS=proxy.example.com PCTL_PROXY_PORT=8080\n\n'
-          return 1
-      fi
+      pctl_set_proxy_state "http://${PCTL_RESOLVED_ADDRESS}:${PCTL_RESOLVED_PORT}" "$PCTL_RESOLVED_NO_PROXY"
 
-      export http_proxy="http://$address:$port"
-      export https_proxy="http://$address:$port"
-
-      cprintf 'done\n\n' $color[success]
+      cprintf 'done\n\n' "$PCTL_COLOR[success]"
       ;;
     -u | --unset )
       printf 'Unsetting proxy...'
-      if [[ -z $http_proxy ]] && [[ -z $https_proxy ]]; then
-        cprintf 'error\n' $color[error]
+      if ! pctl_any_set "${PCTL_ALL_VARS[@]}"; then
+        cprintf 'error\n' "$PCTL_COLOR[error]"
         printf '  Environment variable has already unset.\n\n'
         return 1
       fi
-      unset http_proxy https_proxy
-      cprintf 'done\n\n' $color[success]
+      pctl_unset_proxy_state
+      cprintf 'done\n\n' "$PCTL_COLOR[success]"
       ;;
     -S | --status )
       echo 'Current status'
-      echo "    http_proxy: $http_proxy"
-      echo "    https_proxy: $https_proxy"
+      pctl_print_status_var http_proxy
+      pctl_print_status_var HTTP_PROXY
+      pctl_print_status_var https_proxy
+      pctl_print_status_var HTTPS_PROXY
+      pctl_print_status_var no_proxy
+      pctl_print_status_var NO_PROXY
       echo
       ;;
     -h | --help )
-      echo "Usage: $CMDNAME [OPTIONS]                   "
-      echo "Options:                                    "
-      echo "    -s, --set     Setting environment variable of proxy  "
-      echo "    -u, --unset   Unsetting environment variable of proxy"
-      echo "    -S, --status  Check environment variable of proxy    "
-      echo "    -h, --help    Display help                           "
-      echo "    -v, --version Display version information            "
-      echo
+      pctl_show_help
       ;;
     -v | --version )
-      printf '%s %s\n\n' "$CMDNAME" "$VERSION"
+      printf '%s %s\n\n' "$PCTL_CMDNAME" "$PCTL_VERSION"
       ;;
     -* )
-      error_message "illegal option -- '$(echo $1 | sed 's/^-*//')'" && return 1
+      error_message "illegal option -- '$(pctl_strip_leading_dashes "$1")'" && return 1
       ;;
     * )
       error_message "illegal argument -- $1" && return 1
@@ -88,10 +175,12 @@ main() {
 }
 
 error_message() {
-  printf '%s: %s\n' "$CMDNAME" "$1"
-  printf "Try '%s --help' for more information.\n\n" "$CMDNAME"
+  printf '%s: %s\n' "$PCTL_CMDNAME" "$1"
+  printf "Try '%s --help' for more information.\n\n" "$PCTL_CMDNAME"
 }
 
-cprintf() { printf "%b%b%b" "\e[1;38;5;${2};49m" $1 "\e[0;39;49m"; }
+cprintf() {
+  printf '%b%b%b' "\e[1;38;5;${2};49m" "$1" "\e[0;39;49m"
+}
 
-main $@
+main "$@"
